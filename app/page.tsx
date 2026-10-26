@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { UserButton, SignedIn, SignedOut, SignInButton } from '@clerk/nextjs';
@@ -16,7 +16,7 @@ interface Transaction {
 export default function DocLedgerApp() {
   const [activeTab, setActiveTab] = useState<'upload' | 'ledger' | 'reports'>('upload');
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statusText, setStatusText] = useState<string | null>(null);
   const [startingBalance, setStartingBalance] = useState<number>(0);
   const [closingBalance, setClosingBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -26,7 +26,7 @@ export default function DocLedgerApp() {
     if (!file) return;
 
     setIsExtracting(true);
-    setErrorMessage(null);
+    setStatusText('Sending file to Render backend...');
 
     const formData = new FormData();
     formData.append('file', file);
@@ -40,17 +40,18 @@ export default function DocLedgerApp() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || data.error || 'Server error occurred during statement extraction.');
+        throw new Error(data.detail || data.error || 'Backend extraction error');
       }
 
       setTransactions(data.transactions || []);
       if (typeof data.starting_balance === 'number') setStartingBalance(data.starting_balance);
       if (typeof data.closing_balance === 'number') setClosingBalance(data.closing_balance);
       
+      setStatusText(null);
       setActiveTab('ledger');
     } catch (err: any) {
-      console.error('Extraction error:', err);
-      setErrorMessage(err.message || 'Failed to extract transactions. Please try again.');
+      console.error(err);
+      setStatusText('Extraction Failed: ' + (err.message || 'Check network connection'));
     } finally {
       setIsExtracting(false);
       event.target.value = '';
@@ -69,7 +70,7 @@ export default function DocLedgerApp() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Universal DocLedger AI</h1>
-            <p className="text-xs text-slate-500 font-medium">Universal Hubdoc Parser (PDF, JPG, PNG) + QBO Ledger</p>
+            <p className="text-xs text-slate-500 font-medium">Render OCR Engine Active</p>
           </div>
         </div>
 
@@ -115,15 +116,12 @@ export default function DocLedgerApp() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        {errorMessage && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm flex items-center justify-between shadow-sm">
-            <span>{errorMessage}</span>
-            <button
-              onClick={() => setErrorMessage(null)}
-              className="text-red-500 hover:text-red-800 font-bold ml-4"
-            >
-              ×
-            </button>
+        {statusText && (
+          <div className={`mb-6 p-4 rounded-xl text-sm font-medium flex items-center justify-between shadow-sm ${
+            statusText.includes('Failed') ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
+          }`}>
+            <span>{statusText}</span>
+            <button onClick={() => setStatusText(null)} className="font-bold ml-4 text-base">×</button>
           </div>
         )}
 
@@ -134,8 +132,8 @@ export default function DocLedgerApp() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2">Upload Any Statement or Photo</h2>
-            <p className="text-sm text-slate-500 mb-6">Supports PDF statements, scanned documents, camera photos, or receipts</p>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Upload Bank Statement</h2>
+            <p className="text-sm text-slate-500 mb-6">Processes on your dedicated Render OCR Engine</p>
 
             <label
               className={`inline-block px-8 py-3 rounded-xl font-bold text-white transition shadow-md cursor-pointer ${
@@ -159,7 +157,7 @@ export default function DocLedgerApp() {
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Statement Transactions</h2>
-                <p className="text-xs text-slate-500">Auto-extracted and categorized line items</p>
+                <p className="text-xs text-slate-500">Auto-extracted line items</p>
               </div>
               <div className="flex space-x-6 text-sm font-semibold">
                 <span className="text-slate-600">Starting: ${startingBalance.toFixed(2)}</span>
@@ -240,28 +238,23 @@ export default function DocLedgerApp() {
 
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <h3 className="text-base font-bold text-slate-900 mb-4">Export Options</h3>
-              <p className="text-xs text-slate-500 mb-6">Download parsed transactions ready for QuickBooks Online or Excel reconciliation.</p>
-              <div className="flex flex-col space-y-3">
-                <button
-                  onClick={() => {
-                    const csvContent = "data:text/csv;charset=utf-8," 
-                      + ["Date,Payee,Description,Category,Debit,Credit,Balance"]
-                      .concat(transactions.map(t => `"${t.date}","${t.payee}","${t.description}","${t.category}",${t.debit},${t.credit},${t.balance}`))
-                      .join("\n");
-                    const encodedUri = encodeURI(csvContent);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", encodedUri);
-                    link.setAttribute("download", "docledger_transactions.csv");
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
-                  disabled={transactions.length === 0}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-sm font-bold transition shadow-sm"
-                >
-                  Download CSV for QuickBooks / Excel
-                </button>
-              </div>
+              <p className="text-xs text-slate-500 mb-6">Download transactions formatted for accounting.</p>
+              <button
+                onClick={() => {
+                  const headers = "Date,Payee,Description,Category,Debit,Credit,Balance\n";
+                  const rows = transactions.map(t => `"${t.date}","${t.payee}","${t.description}","${t.category}",${t.debit},${t.credit},${t.balance}`).join("\n");
+                  const blob = new Blob([headers + rows], { type: 'text/csv' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'docledger_transactions.csv';
+                  a.click();
+                }}
+                disabled={transactions.length === 0}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-sm font-bold transition shadow-sm"
+              >
+                Download CSV for QuickBooks / Excel
+              </button>
             </div>
           </div>
         )}
