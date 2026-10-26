@@ -4,15 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-// Resilient fallback chain across different clusters
-const FALLBACK_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-1.5-flash'
-];
-
-function cleanAndParseJSON(rawText: string) {
+function parseStatementResponse(rawText: string) {
   let cleaned = rawText.trim();
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -21,37 +13,37 @@ function cleanAndParseJSON(rawText: string) {
   try {
     const direct = JSON.parse(cleaned);
     if (direct.transactions && Array.isArray(direct.transactions)) return direct;
-    if (Array.isArray(direct)) return { transactions: direct };
+    if (Array.isArray(direct)) return { starting_balance: 0, closing_balance: 0, transactions: direct };
   } catch {
-    // Proceed to regex recovery
+    // Continue to regex recovery
   }
 
   const txMatch = cleaned.match(/"transactions"\s*:\s*\[([\s\S]*)/);
   const jsonContent = txMatch ? txMatch[1] : (cleaned.startsWith('[') ? cleaned.slice(1) : cleaned);
 
-  const recoveredItems: any[] = [];
+  const transactions: any[] = [];
   const objRegex = /\{[^{}]*"date"[^{}]*"description"[^{}]*\}/g;
   let match;
 
   while ((match = objRegex.exec(jsonContent)) !== null) {
     try {
-      recoveredItems.push(JSON.parse(match[0]));
+      transactions.push(JSON.parse(match[0]));
     } catch {
-      // skip partial item
+      // Skip partial row
     }
   }
 
-  if (recoveredItems.length > 0) {
+  if (transactions.length > 0) {
     const startMatch = cleaned.match(/"starting_balance"\s*:\s*([0-9.-]+)/);
     const closeMatch = cleaned.match(/"closing_balance"\s*:\s*([0-9.-]+)/);
     return {
       starting_balance: startMatch ? parseFloat(startMatch[1]) : 0,
       closing_balance: closeMatch ? parseFloat(closeMatch[1]) : 0,
-      transactions: recoveredItems
+      transactions
     };
   }
 
-  throw new Error('Could not parse statement lines. Please ensure document is legible.');
+  throw new Error('Unable to extract statement rows. Please check document clarity.');
 }
 
 export async function POST(req: NextRequest) {
@@ -59,15 +51,13 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'GEMINI_API_KEY is not configured in Vercel environment variables.' },
+        { error: 'GEMINI_API_KEY is not configured in environment variables.' },
         { status: 500 }
       );
     }
 
-    const ai = new GoogleGenAI({ apiKey });
     const formData = await req.formData();
     const file = formData.get('file') as File;
-
     if (!file) {
       return NextResponse.json({ error: 'No document file provided.' }, { status: 400 });
     }
@@ -76,14 +66,16 @@ export async function POST(req: NextRequest) {
     const base64Data = Buffer.from(bytes).toString('base64');
     const mimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
 
-    const prompt = `Extract all transaction rows from this bank statement into valid JSON:
+    const ai = new GoogleGenAI({ apiKey });
+
+    const prompt = `Extract all transaction line items from this bank statement into valid JSON:
 {
   "starting_balance": 0.00,
   "closing_balance": 0.00,
   "transactions": [
     {
       "date": "MMM DD",
-      "description": "Short clean description",
+      "description": "Clean description",
       "payee": "Merchant or Entity Name",
       "category": "Revenue / Sales OR General Expense OR Travel & Vehicle OR Meals & Entertainment OR Utilities & Internet OR Bank Charges & Fees OR Owner Draws / Transfers",
       "debit": 0.00,
@@ -92,46 +84,33 @@ export async function POST(req: NextRequest) {
     }
   ]
 }
-Return only JSON. Debit > 0 for withdrawals, Credit > 0 for deposits.`;
+Return pure JSON only. Debit > 0 for withdrawals/money out, Credit > 0 for deposits/money in.`;
 
-    let lastError: any = null;
-
-    for (const model of FALLBACK_MODELS) {
-      try {
-        console.log(`Attempting OCR with model: ${model}...`);
-        const response = await ai.models.generateContent({
-          model,
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { inlineData: { data: base64Data, mimeType } },
-                { text: prompt }
-              ]
-            }
-          ],
-          config: {
-            temperature: 0.1,
-            responseMimeType: 'application/json'
-          }
-        });
-
-        if (response.text) {
-          const parsed = cleanAndParseJSON(response.text);
-          return NextResponse.json(parsed);
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { inlineData: { data: base64Data, mimeType } },
+            { text: prompt }
+          ]
         }
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`Model ${model} failed:`, err.message || err);
-        // Continue to the next model in the fallback array
+      ],
+      config: {
+        temperature: 0.1,
+        responseMimeType: 'application/json'
       }
-    }
+    });
 
-    throw lastError || new Error('All models are currently overloaded. Please try again shortly.');
+    const outputText = response.text || '';
+    const parsed = parseStatementResponse(outputText);
+    return NextResponse.json(parsed);
+
   } catch (error: any) {
-    console.error('OCR Extraction Error:', error);
+    console.error('Server error during parse:', error);
     return NextResponse.json(
-      { error: error.message || 'Processing failed' },
+      { error: error?.message || 'Document extraction failed.' },
       { status: 500 }
     );
   }
