@@ -26,7 +26,7 @@ export default function DocLedgerApp() {
     if (!file) return;
 
     setIsExtracting(true);
-    setStatusText('Sending file to Render backend...');
+    setStatusText('Sending file to Render OCR engine...');
 
     const formData = new FormData();
     formData.append('file', file);
@@ -121,7 +121,7 @@ export default function DocLedgerApp() {
             statusText.includes('Failed') ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
           }`}>
             <span>{statusText}</span>
-            <button onClick={() => setStatusText(null)} className="font-bold ml-4 text-base">×</button>
+            <button onClick={() => setStatusText(null)} className="font-bold ml-4 text-base">x</button>
           </div>
         )}
 
@@ -189,7 +189,7 @@ export default function DocLedgerApp() {
                     {transactions.map((tx, idx) => (
                       <tr key={idx} className="hover:bg-slate-50 transition">
                         <td className="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">{tx.date}</td>
-                        <td className="py-3 px-4 font-semibold text-slate-900">{tx.payee || '—'}</td>
+                        <td className="py-3 px-4 font-semibold text-slate-900">{tx.payee || '-'}</td>
                         <td className="py-3 px-4 text-slate-600">{tx.description}</td>
                         <td className="py-3 px-4">
                           <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
@@ -197,13 +197,13 @@ export default function DocLedgerApp() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-rose-600">
-                          {tx.debit > 0 ? `$${tx.debit.toFixed(2)}` : '—'}
+                          {tx.debit > 0 ? '$' + tx.debit.toFixed(2) : '-'}
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-emerald-600">
-                          {tx.credit > 0 ? `$${tx.credit.toFixed(2)}` : '—'}
+                          {tx.credit > 0 ? '$' + tx.credit.toFixed(2) : '-'}
                         </td>
                         <td className="py-3 px-4 text-right font-semibold text-slate-800">
-                          {tx.balance ? `$${tx.balance.toFixed(2)}` : '—'}
+                          {tx.balance ? '$' + tx.balance.toFixed(2) : '-'}
                         </td>
                       </tr>
                     ))}
@@ -242,7 +242,7 @@ export default function DocLedgerApp() {
               <button
                 onClick={() => {
                   const headers = "Date,Payee,Description,Category,Debit,Credit,Balance\n";
-                  const rows = transactions.map(t => `"${t.date}","${t.payee}","${t.description}","${t.category}",${t.debit},${t.credit},${t.balance}`).join("\n");
+                  const rows = transactions.map(t => '"' + t.date + '","' + t.payee + '","' + t.description + '","' + t.category + '",' + t.debit + ',' + t.credit + ',' + t.balance).join("\n");
                   const blob = new Blob([headers + rows], { type: 'text/csv' });
                   const url = window.URL.createObjectURL(blob);
                   const a = document.createElement('a');
