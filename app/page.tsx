@@ -32,7 +32,7 @@ export default function DocLedgerApp() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('/api/extract', {
+      const response = await fetch('https://docledger-backend.onrender.com/api/extract', {
         method: 'POST',
         body: formData,
       });
@@ -157,10 +157,10 @@ export default function DocLedgerApp() {
                 <p className="text-xs text-slate-500">Auto-extracted line items</p>
               </div>
               <div className="flex space-x-6 text-sm font-semibold">
-                <span className="text-slate-600">Starting: ${startingBalance.toFixed(2)}</span>
-                <span className="text-emerald-600">Total Credits: +${totalCredits.toFixed(2)}</span>
-                <span className="text-rose-600">Total Debits: -${totalDebits.toFixed(2)}</span>
-                <span className="text-blue-600">Closing: ${closingBalance.toFixed(2)}</span>
+                <span className="text-slate-600">Starting: \${startingBalance.toFixed(2)}</span>
+                <span className="text-emerald-600">Total Credits: +\${totalCredits.toFixed(2)}</span>
+                <span className="text-rose-600">Total Debits: -\${totalDebits.toFixed(2)}</span>
+                <span className="text-blue-600">Closing: \${closingBalance.toFixed(2)}</span>
               </div>
             </div>
 
@@ -218,16 +218,16 @@ export default function DocLedgerApp() {
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-slate-600">Total Inflow</span>
-                  <span className="font-semibold text-emerald-600">+${totalCredits.toFixed(2)}</span>
+                  <span className="font-semibold text-emerald-600">+\${totalCredits.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-slate-600">Total Outflow</span>
-                  <span className="font-semibold text-rose-600">-${totalDebits.toFixed(2)}</span>
+                  <span className="font-semibold text-rose-600">-\${totalDebits.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between py-2 pt-4">
                   <span className="font-bold text-slate-800">Net Flow</span>
                   <span className={`font-bold ${totalCredits - totalDebits >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    ${(totalCredits - totalDebits).toFixed(2)}
+                    \${(totalCredits - totalDebits).toFixed(2)}
                   </span>
                 </div>
               </div>
