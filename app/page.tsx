@@ -16,7 +16,7 @@ interface Transaction {
 export default function DocLedgerApp() {
   const [activeTab, setActiveTab] = useState<'upload' | 'ledger' | 'reports'>('upload');
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
-  const [statusText, setStatusText] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [startingBalance, setStartingBalance] = useState<number>(0);
   const [closingBalance, setClosingBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -26,13 +26,13 @@ export default function DocLedgerApp() {
     if (!file) return;
 
     setIsExtracting(true);
-    setStatusText('Sending file to Render OCR engine...');
+    setStatusMessage(null);
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const response = await fetch('https://docledger-backend.onrender.com/api/extract', {
+      const response = await fetch('/api/extract', {
         method: 'POST',
         body: formData,
       });
@@ -40,18 +40,17 @@ export default function DocLedgerApp() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || data.error || 'Backend extraction error');
+        throw new Error(data.error || data.detail || 'Extraction failed');
       }
 
       setTransactions(data.transactions || []);
       if (typeof data.starting_balance === 'number') setStartingBalance(data.starting_balance);
       if (typeof data.closing_balance === 'number') setClosingBalance(data.closing_balance);
-      
-      setStatusText(null);
+
       setActiveTab('ledger');
     } catch (err: any) {
       console.error(err);
-      setStatusText('Extraction Failed: ' + (err.message || 'Check network connection'));
+      setStatusMessage(err.message || 'Error communicating with parser');
     } finally {
       setIsExtracting(false);
       event.target.value = '';
@@ -116,12 +115,10 @@ export default function DocLedgerApp() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        {statusText && (
-          <div className={`mb-6 p-4 rounded-xl text-sm font-medium flex items-center justify-between shadow-sm ${
-            statusText.includes('Failed') ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
-          }`}>
-            <span>{statusText}</span>
-            <button onClick={() => setStatusText(null)} className="font-bold ml-4 text-base">x</button>
+        {statusMessage && (
+          <div className="mb-6 p-4 rounded-xl text-sm font-medium bg-rose-50 text-rose-700 border border-rose-200 flex items-center justify-between">
+            <span>{statusMessage}</span>
+            <button onClick={() => setStatusMessage(null)} className="font-bold ml-4">✕</button>
           </div>
         )}
 
@@ -133,14 +130,14 @@ export default function DocLedgerApp() {
               </svg>
             </div>
             <h2 className="text-xl font-bold text-slate-800 mb-2">Upload Bank Statement</h2>
-            <p className="text-sm text-slate-500 mb-6">Processes on your dedicated Render OCR Engine</p>
+            <p className="text-sm text-slate-500 mb-6">PDF statements, receipts, and scans</p>
 
             <label
               className={`inline-block px-8 py-3 rounded-xl font-bold text-white transition shadow-md cursor-pointer ${
                 isExtracting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
-              {isExtracting ? 'Extracting transactions...' : 'Select File to Convert'}
+              {isExtracting ? 'Processing with Render OCR...' : 'Select File to Extract'}
               <input
                 type="file"
                 className="hidden"
@@ -169,7 +166,7 @@ export default function DocLedgerApp() {
 
             {transactions.length === 0 ? (
               <div className="py-16 text-center text-slate-400">
-                <p>No transactions extracted yet. Upload a document to start.</p>
+                <p>No transactions found. Upload another statement.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -189,7 +186,7 @@ export default function DocLedgerApp() {
                     {transactions.map((tx, idx) => (
                       <tr key={idx} className="hover:bg-slate-50 transition">
                         <td className="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">{tx.date}</td>
-                        <td className="py-3 px-4 font-semibold text-slate-900">{tx.payee || '-'}</td>
+                        <td className="py-3 px-4 font-semibold text-slate-900">{tx.payee || '—'}</td>
                         <td className="py-3 px-4 text-slate-600">{tx.description}</td>
                         <td className="py-3 px-4">
                           <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
@@ -197,13 +194,13 @@ export default function DocLedgerApp() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-rose-600">
-                          {tx.debit > 0 ? '$' + tx.debit.toFixed(2) : '-'}
+                          {tx.debit > 0 ? `$${tx.debit.toFixed(2)}` : '—'}
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-emerald-600">
-                          {tx.credit > 0 ? '$' + tx.credit.toFixed(2) : '-'}
+                          {tx.credit > 0 ? `$${tx.credit.toFixed(2)}` : '—'}
                         </td>
                         <td className="py-3 px-4 text-right font-semibold text-slate-800">
-                          {tx.balance ? '$' + tx.balance.toFixed(2) : '-'}
+                          {tx.balance ? `$${tx.balance.toFixed(2)}` : '—'}
                         </td>
                       </tr>
                     ))}
@@ -220,15 +217,15 @@ export default function DocLedgerApp() {
               <h3 className="text-base font-bold text-slate-900 mb-4">Summary Breakdown</h3>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between py-2 border-b">
-                  <span className="text-slate-600">Total Inflow (Deposits)</span>
+                  <span className="text-slate-600">Total Inflow</span>
                   <span className="font-semibold text-emerald-600">+${totalCredits.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
-                  <span className="text-slate-600">Total Outflow (Expenses)</span>
+                  <span className="text-slate-600">Total Outflow</span>
                   <span className="font-semibold text-rose-600">-${totalDebits.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between py-2 pt-4">
-                  <span className="font-bold text-slate-800">Net Cash Flow</span>
+                  <span className="font-bold text-slate-800">Net Flow</span>
                   <span className={`font-bold ${totalCredits - totalDebits >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     ${(totalCredits - totalDebits).toFixed(2)}
                   </span>
@@ -237,23 +234,22 @@ export default function DocLedgerApp() {
             </div>
 
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-base font-bold text-slate-900 mb-4">Export Options</h3>
-              <p className="text-xs text-slate-500 mb-6">Download transactions formatted for accounting.</p>
+              <h3 className="text-base font-bold text-slate-900 mb-4">Export</h3>
               <button
                 onClick={() => {
-                  const headers = "Date,Payee,Description,Category,Debit,Credit,Balance\n";
-                  const rows = transactions.map(t => '"' + t.date + '","' + t.payee + '","' + t.description + '","' + t.category + '",' + t.debit + ',' + t.credit + ',' + t.balance).join("\n");
+                  const headers = 'Date,Payee,Description,Category,Debit,Credit,Balance\n';
+                  const rows = transactions.map(t => `"${t.date}","${t.payee}","${t.description}","${t.category}",${t.debit},${t.credit},${t.balance}`).join('\n');
                   const blob = new Blob([headers + rows], { type: 'text/csv' });
                   const url = window.URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = 'docledger_transactions.csv';
+                  a.download = 'transactions.csv';
                   a.click();
                 }}
                 disabled={transactions.length === 0}
                 className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-sm font-bold transition shadow-sm"
               >
-                Download CSV for QuickBooks / Excel
+                Download CSV
               </button>
             </div>
           </div>
