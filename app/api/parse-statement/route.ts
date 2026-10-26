@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
-// Active models recognized by your API key version
-const ACTIVE_MODELS = [
-  'gemini-3.1-pro-preview',
-  'gemini-3.8-flash'
-];
+// Extend Vercel function timeout from default 15s to 60s
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const ACTIVE_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.5-pro'
+];
 
 function extractTransactionsSafely(rawText: string) {
   let cleaned = rawText.trim();
@@ -23,7 +23,7 @@ function extractTransactionsSafely(rawText: string) {
     if (direct.transactions && Array.isArray(direct.transactions)) return direct;
     if (Array.isArray(direct)) return { transactions: direct };
   } catch {
-    // Continue to snippet extraction
+    // Continue to snippet recovery
   }
 
   const txMatch = cleaned.match(/"transactions"\s*:\s*\[([\s\S]*)/);
@@ -38,7 +38,7 @@ function extractTransactionsSafely(rawText: string) {
       const item = JSON.parse(match[0]);
       recoveredItems.push(item);
     } catch {
-      // ignore partial
+      // Skip partial item
     }
   }
 
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'GEMINI_API_KEY is not defined in .env.local' },
+        { error: 'GEMINI_API_KEY is not defined in environment variables' },
         { status: 500 }
       );
     }
@@ -97,7 +97,7 @@ Extract every transaction line item from this bank statement into compact JSON f
   ]
 }
 Rules:
-1. Return pure JSON only.
+1. Return pure valid JSON only.
 2. If withdrawal, debit > 0 and credit = 0. If deposit, credit > 0 and debit = 0.
 3. Clean merchant payee names.
 `;
@@ -105,49 +105,46 @@ Rules:
     let lastError: any = null;
 
     for (const modelName of ACTIVE_MODELS) {
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          console.log(`Processing with ${modelName} (attempt ${attempt})...`);
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    inlineData: {
-                      data: base64Data,
-                      mimeType: mimeType
-                    }
-                  },
-                  { text: prompt }
-                ]
-              }
-            ],
-            config: {
-              temperature: 0.1,
-              responseMimeType: 'application/json'
+      try {
+        console.log(`Processing with ${modelName}...`);
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType
+                  }
+                },
+                { text: prompt }
+              ]
             }
-          });
+          ],
+          config: {
+            temperature: 0.1,
+            responseMimeType: 'application/json'
+          }
+        });
 
-          if (response.text) {
-            const parsed = extractTransactionsSafely(response.text);
-            console.log(`Successfully parsed with ${modelName}`);
-            return NextResponse.json(parsed);
-          }
-        } catch (err: any) {
-          lastError = err;
-          console.warn(`${modelName} warning:`, err.message || err);
-          if (err?.message?.includes('503') || err?.status === 503) {
-            await sleep(2000);
-          }
+        if (response.text) {
+          const parsed = extractTransactionsSafely(response.text);
+          return NextResponse.json(parsed);
         }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`${modelName} warning:`, err.message || err);
       }
     }
 
     throw lastError || new Error('Service busy. Please try again.');
   } catch (error: any) {
     console.error('API Error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to process document' }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || 'Failed to process document' },
+      { status: 500 }
+    );
   }
 }
