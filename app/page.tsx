@@ -32,7 +32,7 @@ export default function DocLedgerApp() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('/api/parse-statement', {
+      const response = await fetch('https://docledger-backend.onrender.com/api/extract', {
         method: 'POST',
         body: formData,
       });
