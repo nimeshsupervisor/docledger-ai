@@ -32,6 +32,7 @@ export default function DocLedgerApp() {
     formData.append('file', file);
 
     try {
+      // Connects directly to the dedicated Python OCR backend on Render
       const response = await fetch('https://docledger-backend.onrender.com/api/extract', {
         method: 'POST',
         body: formData,
@@ -40,7 +41,7 @@ export default function DocLedgerApp() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Server error occurred during statement extraction.');
+        throw new Error(data.detail || data.error || 'Server error occurred during statement extraction.');
       }
 
       setTransactions(data.transactions || []);
