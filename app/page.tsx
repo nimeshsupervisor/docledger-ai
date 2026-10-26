@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState } from 'react';
 import { UserButton, SignedIn, SignedOut, SignInButton } from '@clerk/nextjs';
@@ -32,7 +32,6 @@ export default function DocLedgerApp() {
     formData.append('file', file);
 
     try {
-      // Connects directly to the dedicated Python OCR backend on Render
       const response = await fetch('https://docledger-backend.onrender.com/api/extract', {
         method: 'POST',
         body: formData,
@@ -63,7 +62,6 @@ export default function DocLedgerApp() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* Header */}
       <header className="border-b bg-white px-6 py-4 flex items-center justify-between shadow-sm sticky top-0 z-50">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
@@ -116,7 +114,6 @@ export default function DocLedgerApp() {
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="max-w-6xl mx-auto px-6 py-8">
         {errorMessage && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm flex items-center justify-between shadow-sm">
@@ -130,7 +127,6 @@ export default function DocLedgerApp() {
           </div>
         )}
 
-        {/* Tab 1: Upload */}
         {activeTab === 'upload' && (
           <div className="bg-white border-2 border-dashed border-blue-200 rounded-3xl p-12 text-center shadow-sm max-w-2xl mx-auto my-12">
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -158,7 +154,6 @@ export default function DocLedgerApp() {
           </div>
         )}
 
-        {/* Tab 2: Categorized Ledger */}
         {activeTab === 'ledger' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -221,7 +216,6 @@ export default function DocLedgerApp() {
           </div>
         )}
 
-        {/* Tab 3: QBO Reports */}
         {activeTab === 'reports' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
